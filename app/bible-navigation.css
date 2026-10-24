@@ -1,0 +1,13 @@
+.bible-controls{grid-template-columns:1.35fr 1.15fr .7fr .8fr}
+.chapter-select{height:37px;border:1px solid #dbe1e9;border-radius:8px;padding:0 10px;background:#fff;width:100%;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.chapter-select svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2}
+.chapter-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:8px;padding:14px;margin:-6px 0 15px;border:1px solid #dbe1e9;border-radius:10px;background:#f8fafc}
+.chapter-picker button{height:36px;border-radius:7px;background:#fff;border:1px solid #e2e8f0;color:#355078;font-size:13px;font-weight:600}
+.chapter-picker button.active{background:#1a2b4c;border-color:#1a2b4c;color:#fff}
+.verse.selected{background:#fff1bd;border-radius:6px;padding:8px 10px;margin-left:-10px;margin-right:-10px}
+.verse-pair.selected{border:2px solid #d29b26;box-shadow:0 3px 10px #d29b2626}
+
+@media (max-width:699px){
+  .bible-controls{grid-template-columns:1fr 1fr}
+  .bible-controls label:first-child{grid-column:1/-1}
+}

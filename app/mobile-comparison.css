@@ -1,0 +1,19 @@
+.mobile-comparison{display:none}
+.bible-title{font:700 30px "Playfair Display",serif;color:#1a2b4c;margin:0 0 25px}
+
+@media (max-width:699px){
+  .bible-controls{grid-template-columns:1fr 1fr}
+  .bible-controls label:first-child{grid-column:1/-1}
+  .bible-controls label:last-child{grid-column:auto}
+  .desktop-comparison{display:none}
+  .mobile-comparison{display:block}
+  .comparison-title{padding:20px 0 13px}
+  .comparison-title h2{font:700 27px "Playfair Display",serif;color:#1a2b4c;margin:4px 0}
+  .comparison-title span{font-size:12px;color:#718096}
+  .verse-pair{border:1px solid #dce4ef;border-radius:12px;overflow:hidden;margin:0 0 14px}
+  .verse-pair>div{padding:14px 15px;background:#fff8e8}
+  .verse-pair>div+div{background:#eaf2ff;border-top:1px solid #c9d9f0}
+  .verse-pair p:last-child{font:16px/1.65 Georgia,serif;margin:0}
+  .translation-label{font:700 10px "DM Sans",Arial,sans-serif;letter-spacing:.09em;color:#8a641e;margin:0 0 8px}
+  .verse-pair>div+div .translation-label{color:#315d9d}
+}
