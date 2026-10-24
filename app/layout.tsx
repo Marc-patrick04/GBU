@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GBUR Musanze",
+  title: "GBUR RP Musanze",
   description: "Your campus community, wherever you are.",
   manifest: "/manifest.json",
   icons: { icon: "/logo.png", apple: "/logo.png" },
