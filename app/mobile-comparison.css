@@ -5,7 +5,7 @@
   .bible-controls{grid-template-columns:1fr 1fr}
   .bible-controls label:first-child{grid-column:1/-1}
   .bible-controls label:last-child{grid-column:auto}
-  .desktop-comparison{display:none}
+  .scripture-layout.desktop-comparison{display:none}
   .mobile-comparison{display:block}
   .comparison-title{padding:20px 0 13px}
   .comparison-title h2{font:700 27px "Playfair Display",serif;color:#1a2b4c;margin:4px 0}

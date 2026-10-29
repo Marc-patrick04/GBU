@@ -1,0 +1,33 @@
+.mobile-reader-toolbar,.mobile-sticky-reader-nav,.reader-sheet,.reader-sheet-backdrop{display:none}
+
+@media (max-width:699px){
+  .bible-title,.desktop-reader-controls{display:none}
+  .mobile-reader-toolbar,.sticky-chapter-nav{display:none}
+  .mobile-sticky-reader-nav{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:40px minmax(0,1fr) 40px 40px;align-items:center;min-height:47px;margin:0 -2px 9px;padding:4px 2px;background:#fff;border-bottom:1px solid #e8e9ed}
+  .mobile-sticky-reader-nav>button{width:34px;height:34px;display:grid;place-items:center;border:1px solid #dbe1e9;border-radius:8px;color:#2c5ca9;font-size:27px;line-height:1}
+  .mobile-sticky-reader-nav>button:last-child{justify-self:end}
+  .mobile-sticky-reader-nav>button:disabled{color:#aeb8c6;border-color:#edf0f4;cursor:not-allowed}
+  .mobile-sticky-reader-nav .sticky-reader-context{width:100%;padding:0 7px;display:flex;align-items:center;justify-content:center;gap:4px;color:#1a2b4c;font-size:14px;overflow:hidden}
+  .sticky-reader-context b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sticky-reader-context svg,.sticky-search-toggle svg{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;stroke-width:2}
+  .mobile-sticky-reader-nav .sticky-search-toggle{font-size:0}
+  .reader-context{min-width:0;flex:1;height:43px;padding:0 11px;border:1px solid #dbe1e9;border-radius:9px;background:#fff;display:flex;align-items:center;gap:8px;text-align:left}
+  .reader-context span{font-size:11px;font-weight:700;color:#2c5ca9}
+  .reader-context b{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#1a2b4c}
+  .reader-context svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
+  .reader-search-toggle{width:43px;height:43px;border:1px solid #dbe1e9;border-radius:9px;color:#2c5ca9;display:grid;place-items:center}
+  .reader-search-toggle svg{width:20px;fill:none;stroke:currentColor;stroke-width:2}
+  .search{display:none}
+  .search.open{display:flex;margin:0 0 10px}
+  .search-clear{width:28px;height:28px;border-radius:50%;color:#62708a;font-size:22px;line-height:1;display:grid;place-items:center}
+  .reader-sheet-backdrop{display:block;position:fixed;inset:0;z-index:10;background:#18264166}
+  .reader-sheet{display:block;position:fixed;z-index:11;left:0;right:0;bottom:0;max-height:82vh;overflow-y:auto;padding:12px 22px calc(24px + env(safe-area-inset-bottom));background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -10px 30px #15233d22}
+  .reader-sheet header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .reader-sheet h2{font:700 20px "Playfair Display",serif;margin:0;color:#1a2b4c}
+  .reader-sheet header button{width:34px;height:34px;border-radius:50%;background:#f0f4fa;font-size:24px;line-height:1;color:#52627a}
+  .reader-sheet .translation-controls{margin-bottom:14px}
+  .reader-sheet .bible-controls{grid-template-columns:1.45fr .75fr .75fr;gap:7px}
+  .reader-sheet .bible-controls label:first-child{grid-column:auto}
+  .reader-sheet .chapter-picker{margin-top:10px}
+  .reader-sheet .book-picker{max-height:270px}
+}

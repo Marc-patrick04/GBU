@@ -1,26 +1,35 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import "./bible.css";
 import "./mobile-comparison.css";
 import "./bible-navigation.css";
+import "./reader-mode.css";
 
 type Screen = "home" | "bible" | "groups" | "account";
 
 type Translation = "NIV" | "KJV" | "ESV" | "BY" | "BIR";
 type Verse = { number: string; text: string };
 type BibleBook = { id: number; name: string; chapters: Verse[][] };
+type BiblePosition = { version: Translation; bookName: string; chapterNumber: number; selectedVerse: string };
+type BibleSearchResult = { bookName: string; chapterNumber: number; verse: Verse };
+
+const biblePositionStorageKey = "gbur-bible-position";
 
 const translations: Record<Translation, string> = {
-  NIV: "New International Version", KJV: "King James Version", ESV: "English Standard Version", BY: "Biblia Yera", BIR: "Biblia in Kinyarwanda",
+  NIV: "New International Version", KJV: "King James Version", ESV: "English Standard Version", BY: "Bibiliya Yera", BIR: "Bibiliya Ijambo ry'Imana",
 };
 
-const kinyarwandaBookNames = [
+const byBookNames = [
   "Itangiriro", "Kuva", "Abalewi", "Kubara", "Gutegeka kwa kabiri", "Yosuwa", "Abacamanza", "Rusi", "1 Samweli", "2 Samweli", "1 Abami", "2 Abami", "1 Ngoma", "2 Ngoma", "Ezira", "Nehemiya", "Esiteri", "Yobu", "Zaburi", "Imigani", "Umubwiriza", "Indirimbo ya Salomo", "Yesaya", "Yeremiya", "Amaganya", "Ezekiyeli", "Daniyeli", "Hoseya", "Yoweli", "Amosi", "Obadiya", "Yona", "Mika", "Nahumu", "Habakuki", "Zefaniya", "Hagayi", "Zekariya", "Malaki", "Matayo", "Mariko", "Luka", "Yohana", "Ibyakozwe n'Intumwa", "Abaroma", "1 Abakorinto", "2 Abakorinto", "Abagalatiya", "Abefeso", "Abafilipi", "Abakolosayi", "1 Abatesalonike", "2 Abatesalonike", "1 Timoteyo", "2 Timoteyo", "Tito", "Filemoni", "Abaheburayo", "Yakobo", "1 Petero", "2 Petero", "1 Yohana", "2 Yohana", "3 Yohana", "Yuda", "Ibyahishuwe",
 ];
 
-function parseBible(xml: string): BibleBook[] {
+const birBookNames = [
+  "Intangiriro", "Iyimukamisiri", "Abalewi", "Ibarura", "Ivugurura ry'Amategeko", "Yosuwa", "Abacamanza", "Rusi", "1 Samweli", "2 Samweli", "1 Abami", "2 Abami", "1 Ngoma", "2 Ngoma", "Ezira", "Nehemiya", "Esiteri", "Yobu", "Zaburi", "Imigani", "Umubwiriza", "Indirimbo ya Salomo", "Yesaya", "Yeremiya", "Amaganya", "Ezekiyeli", "Daniyeli", "Hoseya", "Yoweli", "Amosi", "Obadiya", "Yona", "Mika", "Nahumu", "Habakuki", "Zefaniya", "Hagayi", "Zekariya", "Malaki", "Matayo", "Mariko", "Luka", "Yohana", "Ibyakozwe n'Intumwa", "Abaroma", "1 Abakorinto", "2 Abakorinto", "Abagalatiya", "Abefeso", "Abafilipi", "Abakolosayi", "1 Abatesalonike", "2 Abatesalonike", "1 Timoteyo", "2 Timoteyo", "Tito", "Filemoni", "Abaheburayo", "Yakobo", "1 Petero", "2 Petero", "1 Yohana", "2 Yohana", "3 Yohana", "Yuda", "Ibyahishuwe",
+];
+
+function parseBible(xml: string, translation: Translation): BibleBook[] {
   const document = new DOMParser().parseFromString(xml, "application/xml");
   const isZefania = document.getElementsByTagName("BIBLEBOOK").length > 0;
   const isRwandan = document.getElementsByTagName("book").length > 0;
@@ -33,7 +42,7 @@ function parseBible(xml: string): BibleBook[] {
       })),
     );
     const id = Number(book.getAttribute(isZefania ? "bnumber" : "number")) || index + 1;
-    const name = isRwandan ? kinyarwandaBookNames[id - 1] : book.getAttribute(isZefania ? "bname" : "n");
+    const name = isRwandan ? (translation === "BIR" ? birBookNames : byBookNames)[id - 1] : book.getAttribute(isZefania ? "bname" : "n");
     return { id, name: name ?? "Untitled", chapters };
   });
 }
@@ -106,9 +115,38 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
   const [library, setLibrary] = useState<Partial<Record<Translation, BibleBook[]>>>({});
   const [bookName, setBookName] = useState("Genesis");
   const [chapterNumber, setChapterNumber] = useState(1);
+  const [bookPickerOpen, setBookPickerOpen] = useState(false);
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
+  const [versePickerOpen, setVersePickerOpen] = useState(false);
+  const [readerControlsOpen, setReaderControlsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [selectedVerse, setSelectedVerse] = useState("");
   const [loading, setLoading] = useState(true);
+  const [positionRestored, setPositionRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedPosition = JSON.parse(localStorage.getItem(biblePositionStorageKey) ?? "null") as Partial<BiblePosition> | null;
+      const savedVersion = savedPosition?.version;
+      const savedChapter = savedPosition?.chapterNumber;
+      if (savedPosition && typeof savedVersion === "string" && savedVersion in translations) {
+        setVersion(savedVersion as Translation);
+        setBookName(typeof savedPosition.bookName === "string" ? savedPosition.bookName : "Genesis");
+        setChapterNumber(typeof savedChapter === "number" && Number.isInteger(savedChapter) && savedChapter > 0 ? savedChapter : 1);
+        setSelectedVerse(typeof savedPosition.selectedVerse === "string" ? savedPosition.selectedVerse : "");
+      }
+    } catch {
+      localStorage.removeItem(biblePositionStorageKey);
+    } finally {
+      setPositionRestored(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!positionRestored) return;
+    const position: BiblePosition = { version, bookName, chapterNumber, selectedVerse };
+    localStorage.setItem(biblePositionStorageKey, JSON.stringify(position));
+  }, [version, bookName, chapterNumber, selectedVerse, positionRestored]);
 
   useEffect(() => {
     const versionsToLoad = [version, comparison].filter(Boolean) as Translation[];
@@ -117,7 +155,7 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
       if (library[translation]) return [translation, library[translation]] as const;
       const response = await fetch(`/bibles/${translation}.xml`);
       if (!response.ok) throw new Error(`Could not load ${translation}`);
-      return [translation, parseBible(await response.text())] as const;
+      return [translation, parseBible(await response.text(), translation)] as const;
     })).then((items) => {
       if (!active) return;
       setLibrary((current) => ({ ...current, ...Object.fromEntries(items) }));
@@ -132,27 +170,62 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
   const comparisonBook = comparison ? library[comparison]?.find((item) => item.id === book?.id) : undefined;
   const comparisonChapter = comparisonBook?.chapters[chapterNumber - 1] ?? [];
   const visible = useMemo(() => chapter.filter((verse) => verse.text.toLowerCase().includes(search.toLowerCase())), [chapter, search]);
+  const searchResults = useMemo<BibleSearchResult[]>(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return [];
+    return books.flatMap((item) => item.chapters.flatMap((verses, chapterIndex) => verses.filter((verse) => verse.text.toLocaleLowerCase().includes(query)).map((verse) => ({ bookName: item.name, chapterNumber: chapterIndex + 1, verse })))).slice(0, 100);
+  }, [books, search]);
 
   useEffect(() => {
     if (book && book.name !== bookName) setBookName(book.name);
     if (book && chapterNumber > book.chapters.length) setChapterNumber(1);
-  }, [book, bookName, chapterNumber]);
+    if (selectedVerse && !chapter.some((verse) => verse.number === selectedVerse)) setSelectedVerse("");
+  }, [book, bookName, chapterNumber, chapter, selectedVerse]);
 
-  function selectBook(nextBook: string) { setBookName(nextBook); setChapterNumber(1); setSelectedVerse(""); setSearch(""); }
+  useEffect(() => {
+    if (!selectedVerse || loading) return;
+    const scrollTimer = window.setTimeout(() => {
+      const selectedElement = Array.from(document.querySelectorAll<HTMLElement>(".verse.selected, .verse-pair.selected")).find((element) => element.getClientRects().length > 0);
+      selectedElement?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+    return () => window.clearTimeout(scrollTimer);
+  }, [selectedVerse, loading, version, bookName, chapterNumber, comparison]);
+
+  useEffect(() => {
+    if (!bookPickerOpen) return;
+    const scrollTimer = window.setTimeout(() => {
+      const selectedBook = Array.from(document.querySelectorAll<HTMLElement>(".book-picker button.active")).find((element) => element.getClientRects().length > 0);
+      selectedBook?.scrollIntoView({ block: "center" });
+    }, 0);
+    return () => window.clearTimeout(scrollTimer);
+  }, [bookPickerOpen, bookName]);
+
+  function selectBook(nextBook: string) { setBookName(nextBook); setChapterNumber(1); setSelectedVerse(""); setSearch(""); setBookPickerOpen(false); }
   function selectChapter(nextChapter: number) { setChapterNumber(nextChapter); setSelectedVerse(""); setSearch(""); setChapterPickerOpen(false); }
+  function selectVerse(nextVerse: string) { setSelectedVerse(nextVerse); setVersePickerOpen(false); setReaderControlsOpen(false); }
+  function openSearchResult(result: BibleSearchResult) { setBookName(result.bookName); setChapterNumber(result.chapterNumber); setSelectedVerse(result.verse.number); setSearch(""); setSearchOpen(false); }
 
   return <>
     <h1 className="bible-title">Bible</h1>
-    <div className="bible-controls">
+    <div className="desktop-reader-controls">
+    <div className="translation-controls">
       <label><span>Version</span><select value={version} onChange={(event) => { setVersion(event.target.value as Translation); setComparison(""); setSelectedVerse(""); }}>{Object.entries(translations).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label>
-      <label><span>Book</span><select value={book?.name ?? bookName} onChange={(event) => selectBook(event.target.value)}>{books.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
-      <label><span>Chapter</span><button type="button" className="chapter-select" onClick={() => setChapterPickerOpen((open) => !open)}>{chapterNumber}<Icon name="chevron" /></button></label>
-      <label><span>Verse</span><select value={selectedVerse} onChange={(event) => setSelectedVerse(event.target.value)}><option value="">All verses</option>{chapter.map((verse) => <option key={verse.number} value={verse.number}>{verse.number}</option>)}</select></label>
+      <div className="compare-bar"><label><span>Compare with</span><select value={comparison} onChange={(event) => setComparison(event.target.value as Translation | "")}><option value="">No comparison</option>{Object.entries(translations).filter(([key, name]) => key !== version).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label></div>
     </div>
+    <div className="bible-controls">
+      <label><span>Book</span><button type="button" className="chapter-select" onClick={() => { setBookPickerOpen((open) => !open); setChapterPickerOpen(false); setVersePickerOpen(false); }}><b>{book?.name ?? bookName}</b><Icon name="chevron" /></button></label>
+      <label><span>Chapter</span><button type="button" className="chapter-select" onClick={() => { setChapterPickerOpen((open) => !open); setBookPickerOpen(false); setVersePickerOpen(false); }}>{chapterNumber}<Icon name="chevron" /></button></label>
+      <label><span>Verse</span><button type="button" className={selectedVerse ? "chapter-select verse-select active" : "chapter-select verse-select"} onClick={() => { setVersePickerOpen((open) => !open); setBookPickerOpen(false); setChapterPickerOpen(false); }}>{selectedVerse || "All"}<Icon name="chevron" /></button></label>
+    </div>
+    {bookPickerOpen && <div className="chapter-picker book-picker" aria-label="Choose a book">{books.map((item) => <button key={item.id} className={item.name === book?.name ? "active" : ""} onClick={() => selectBook(item.name)}>{item.name}</button>)}</div>}
     {chapterPickerOpen && <div className="chapter-picker" aria-label="Choose a chapter">{Array.from({ length: book?.chapters.length ?? 0 }, (_, index) => index + 1).map((number) => <button key={number} className={number === chapterNumber ? "active" : ""} onClick={() => selectChapter(number)}>{number}</button>)}</div>}
-    <div className="compare-bar"><label><span>Compare with</span><select value={comparison} onChange={(event) => setComparison(event.target.value as Translation | "")}><option value="">No comparison</option>{Object.entries(translations).filter(([key, name]) => key !== version).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label></div>
-    <label className="search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this chapter" /></label>
-    {loading ? <p className="loading">Preparing your offline Bible library…</p> : <>
+    {versePickerOpen && <div className="chapter-picker verse-picker" aria-label="Choose a verse"><button className={!selectedVerse ? "active" : ""} onClick={() => selectVerse("")}>All</button>{chapter.map((verse) => <button key={verse.number} className={verse.number === selectedVerse ? "active" : ""} onClick={() => selectVerse(verse.number)}>{verse.number}</button>)}</div>}
+    </div>
+    {readerControlsOpen && <MobileReaderSheet version={version} comparison={comparison} book={book} bookName={bookName} chapterNumber={chapterNumber} selectedVerse={selectedVerse} books={books} chapter={chapter} bookPickerOpen={bookPickerOpen} chapterPickerOpen={chapterPickerOpen} versePickerOpen={versePickerOpen} setVersion={setVersion} setComparison={setComparison} setSelectedVerse={setSelectedVerse} setBookPickerOpen={setBookPickerOpen} setChapterPickerOpen={setChapterPickerOpen} setVersePickerOpen={setVersePickerOpen} onSelectBook={selectBook} onSelectChapter={selectChapter} onSelectVerse={selectVerse} onClose={() => setReaderControlsOpen(false)} />}
+    <div className="sticky-chapter-nav"><button aria-label="Previous chapter" onClick={() => selectChapter(chapterNumber - 1)} disabled={chapterNumber <= 1}>‹</button><span>{book?.name ?? "Bible"} {chapterNumber}</span><button aria-label="Next chapter" onClick={() => selectChapter(chapterNumber + 1)} disabled={!book || chapterNumber >= book.chapters.length}>›</button></div>
+    <div className="mobile-sticky-reader-nav"><button aria-label="Previous chapter" onClick={() => selectChapter(chapterNumber - 1)} disabled={chapterNumber <= 1}>‹</button><button className="sticky-reader-context" onClick={() => setReaderControlsOpen(true)} title={translations[version]}><b>{book?.name ?? "Bible"} {chapterNumber}</b><Icon name="chevron" /></button><button className="sticky-search-toggle" aria-label="Search the Bible" onClick={() => setSearchOpen((open) => !open)}><Icon name="search" /></button><button aria-label="Next chapter" onClick={() => selectChapter(chapterNumber + 1)} disabled={!book || chapterNumber >= book.chapters.length}>›</button></div>
+    <label className={searchOpen ? "search open" : "search"}><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search the Bible" />{searchOpen && <button className="search-clear" type="button" aria-label="Clear and close search" onClick={() => { setSearch(""); setSearchOpen(false); }}>×</button>}</label>
+    {loading ? <p className="loading">Preparing your offline Bible library…</p> : search.trim() ? <BibleSearchResults results={searchResults} onSelect={openSearchResult} /> : <>
       {comparison && <MobileComparison version={version} comparison={comparison} book={book} comparisonBook={comparisonBook} chapterNumber={chapterNumber} verses={visible} comparisonVerses={comparisonChapter} search={search} selectedVerse={selectedVerse} />}
       <div className={comparison ? "scripture-layout comparison desktop-comparison" : "scripture-layout"}>
         <Scripture version={version} book={book} chapterNumber={chapterNumber} verses={visible} search={search} selectedVerse={selectedVerse} />
@@ -160,6 +233,14 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
       </div>
     </>}
   </>;
+}
+
+function BibleSearchResults({ results, onSelect }: { results: BibleSearchResult[]; onSelect: (result: BibleSearchResult) => void }) {
+  return <section className="search-results"><p className="eyebrow">{results.length === 100 ? "FIRST 100 RESULTS" : `${results.length} RESULTS`}</p>{results.map((result) => <button key={`${result.bookName}-${result.chapterNumber}-${result.verse.number}`} onClick={() => onSelect(result)}><span>{result.bookName} {result.chapterNumber}:{result.verse.number}</span><p>{result.verse.text}</p></button>)}{!results.length && <p className="empty">No matching verses were found.</p>}</section>;
+}
+
+function MobileReaderSheet({ version, comparison, book, bookName, chapterNumber, selectedVerse, books, chapter, bookPickerOpen, chapterPickerOpen, versePickerOpen, setVersion, setComparison, setSelectedVerse, setBookPickerOpen, setChapterPickerOpen, setVersePickerOpen, onSelectBook, onSelectChapter, onSelectVerse, onClose }: { version: Translation; comparison: Translation | ""; book?: BibleBook; bookName: string; chapterNumber: number; selectedVerse: string; books: BibleBook[]; chapter: Verse[]; bookPickerOpen: boolean; chapterPickerOpen: boolean; versePickerOpen: boolean; setVersion: Dispatch<SetStateAction<Translation>>; setComparison: Dispatch<SetStateAction<Translation | "">>; setSelectedVerse: Dispatch<SetStateAction<string>>; setBookPickerOpen: Dispatch<SetStateAction<boolean>>; setChapterPickerOpen: Dispatch<SetStateAction<boolean>>; setVersePickerOpen: Dispatch<SetStateAction<boolean>>; onSelectBook: (book: string) => void; onSelectChapter: (chapter: number) => void; onSelectVerse: (verse: string) => void; onClose: () => void }) {
+  return <><button className="reader-sheet-backdrop" aria-label="Close reading settings" onClick={onClose} /><section className="reader-sheet"><header><h2>Reading settings</h2><button aria-label="Close" onClick={onClose}>×</button></header><div className="translation-controls"><label><span>Version</span><select value={version} onChange={(event) => { setVersion(event.target.value as Translation); setComparison(""); setSelectedVerse(""); }}>{Object.entries(translations).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label><div className="compare-bar"><label><span>Compare with</span><select value={comparison} onChange={(event) => setComparison(event.target.value as Translation | "")}><option value="">No comparison</option>{Object.entries(translations).filter(([key]) => key !== version).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label></div></div><div className="bible-controls"><label><span>Book</span><button type="button" className="chapter-select" onClick={() => { setBookPickerOpen((open) => !open); setChapterPickerOpen(false); setVersePickerOpen(false); }}><b>{book?.name ?? bookName}</b><Icon name="chevron" /></button></label><label><span>Chapter</span><button type="button" className="chapter-select" onClick={() => { setChapterPickerOpen((open) => !open); setBookPickerOpen(false); setVersePickerOpen(false); }}>{chapterNumber}<Icon name="chevron" /></button></label><label><span>Verse</span><button type="button" className={selectedVerse ? "chapter-select verse-select active" : "chapter-select verse-select"} onClick={() => { setVersePickerOpen((open) => !open); setBookPickerOpen(false); setChapterPickerOpen(false); }}>{selectedVerse || "All"}<Icon name="chevron" /></button></label></div>{bookPickerOpen && <div className="chapter-picker book-picker">{books.map((item) => <button key={item.id} className={item.name === book?.name ? "active" : ""} onClick={() => onSelectBook(item.name)}>{item.name}</button>)}</div>}{chapterPickerOpen && <div className="chapter-picker">{Array.from({ length: book?.chapters.length ?? 0 }, (_, index) => index + 1).map((number) => <button key={number} className={number === chapterNumber ? "active" : ""} onClick={() => onSelectChapter(number)}>{number}</button>)}</div>}{versePickerOpen && <div className="chapter-picker verse-picker"><button className={!selectedVerse ? "active" : ""} onClick={() => onSelectVerse("")}>All</button>{chapter.map((verse) => <button key={verse.number} className={verse.number === selectedVerse ? "active" : ""} onClick={() => onSelectVerse(verse.number)}>{verse.number}</button>)}</div>}</section></>;
 }
 
 function MobileComparison({ version, comparison, book, comparisonBook, chapterNumber, verses, comparisonVerses, search, selectedVerse }: { version: Translation; comparison: Translation; book?: BibleBook; comparisonBook?: BibleBook; chapterNumber: number; verses: Verse[]; comparisonVerses: Verse[]; search: string; selectedVerse: string }) {
