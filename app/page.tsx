@@ -14,6 +14,7 @@ type Verse = { number: string; text: string };
 type BibleBook = { id: number; name: string; chapters: Verse[][] };
 type BiblePosition = { version: Translation; bookName: string; chapterNumber: number; selectedVerse: string };
 type BibleSearchResult = { bookName: string; chapterNumber: number; verse: Verse };
+type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 const biblePositionStorageKey = "gbur-bible-position";
 
@@ -63,9 +64,39 @@ function Icon({ name }: { name: "home" | "book" | "users" | "user" | "arrow" | "
 
 function ServiceWorker() {
   useEffect(() => {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    if (!("serviceWorker" in navigator)) return;
+    let refreshing = false;
+    navigator.serviceWorker.register("/sw.js").then((registration) => registration.update()).catch(() => undefined);
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!refreshing) { refreshing = true; window.location.reload(); }
+    });
   }, []);
   return null;
+}
+
+function InstallAppButton() {
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const appInstalled = () => { setInstalled(true); setInstallPrompt(null); };
+    const beforeInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as BeforeInstallPromptEvent); };
+    setInstalled(window.matchMedia("(display-mode: standalone)").matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true);
+    window.addEventListener("beforeinstallprompt", beforeInstall);
+    window.addEventListener("appinstalled", appInstalled);
+    return () => { window.removeEventListener("beforeinstallprompt", beforeInstall); window.removeEventListener("appinstalled", appInstalled); };
+  }, []);
+
+  async function install() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") setInstalled(true);
+    setInstallPrompt(null);
+  }
+
+  if (installed || !installPrompt) return null;
+  return <button className="install-app-button" onClick={install}><Icon name="download" /><span>Install app</span></button>;
 }
 
 export default function Page() {
@@ -79,6 +110,7 @@ export default function Page() {
   return (
     <main className="app-shell">
       <ServiceWorker />
+      <InstallAppButton />
       <header className="topbar">
         <div className="brand"><Image src="/logo.png" alt="GBUR logo" width={44} height={44} priority /><span><strong>GBUR</strong><small>RP Musanze College</small></span></div>
         <button className="avatar" aria-label="Open account" onClick={() => setScreen("account")}>JM</button>
@@ -120,6 +152,7 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
   const [versePickerOpen, setVersePickerOpen] = useState(false);
   const [readerControlsOpen, setReaderControlsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [selectedVerse, setSelectedVerse] = useState("");
   const [loading, setLoading] = useState(true);
   const [positionRestored, setPositionRestored] = useState(false);
@@ -141,6 +174,16 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
       setPositionRestored(true);
     }
   }, []);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("gbur-reader-theme");
+    setDarkMode(savedTheme === "dark");
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("reader-dark-mode", darkMode);
+    localStorage.setItem("gbur-reader-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   useEffect(() => {
     if (!positionRestored) return;
@@ -221,9 +264,9 @@ function Bible({ search, setSearch }: { search: string; setSearch: (value: strin
     {chapterPickerOpen && <div className="chapter-picker" aria-label="Choose a chapter">{Array.from({ length: book?.chapters.length ?? 0 }, (_, index) => index + 1).map((number) => <button key={number} className={number === chapterNumber ? "active" : ""} onClick={() => selectChapter(number)}>{number}</button>)}</div>}
     {versePickerOpen && <div className="chapter-picker verse-picker" aria-label="Choose a verse"><button className={!selectedVerse ? "active" : ""} onClick={() => selectVerse("")}>All</button>{chapter.map((verse) => <button key={verse.number} className={verse.number === selectedVerse ? "active" : ""} onClick={() => selectVerse(verse.number)}>{verse.number}</button>)}</div>}
     </div>
-    {readerControlsOpen && <MobileReaderSheet version={version} comparison={comparison} book={book} bookName={bookName} chapterNumber={chapterNumber} selectedVerse={selectedVerse} books={books} chapter={chapter} bookPickerOpen={bookPickerOpen} chapterPickerOpen={chapterPickerOpen} versePickerOpen={versePickerOpen} setVersion={setVersion} setComparison={setComparison} setSelectedVerse={setSelectedVerse} setBookPickerOpen={setBookPickerOpen} setChapterPickerOpen={setChapterPickerOpen} setVersePickerOpen={setVersePickerOpen} onSelectBook={selectBook} onSelectChapter={selectChapter} onSelectVerse={selectVerse} onClose={() => setReaderControlsOpen(false)} />}
+    {readerControlsOpen && <MobileReaderSheet version={version} comparison={comparison} book={book} bookName={bookName} chapterNumber={chapterNumber} selectedVerse={selectedVerse} books={books} chapter={chapter} bookPickerOpen={bookPickerOpen} chapterPickerOpen={chapterPickerOpen} versePickerOpen={versePickerOpen} darkMode={darkMode} setDarkMode={setDarkMode} setVersion={setVersion} setComparison={setComparison} setSelectedVerse={setSelectedVerse} setBookPickerOpen={setBookPickerOpen} setChapterPickerOpen={setChapterPickerOpen} setVersePickerOpen={setVersePickerOpen} onSelectBook={selectBook} onSelectChapter={selectChapter} onSelectVerse={selectVerse} onClose={() => setReaderControlsOpen(false)} />}
     <div className="sticky-chapter-nav"><button aria-label="Previous chapter" onClick={() => selectChapter(chapterNumber - 1)} disabled={chapterNumber <= 1}>‹</button><span>{book?.name ?? "Bible"} {chapterNumber}</span><button aria-label="Next chapter" onClick={() => selectChapter(chapterNumber + 1)} disabled={!book || chapterNumber >= book.chapters.length}>›</button></div>
-    <div className="mobile-sticky-reader-nav"><button aria-label="Previous chapter" onClick={() => selectChapter(chapterNumber - 1)} disabled={chapterNumber <= 1}>‹</button><button className="sticky-reader-context" onClick={() => setReaderControlsOpen(true)} title={translations[version]}><b>{book?.name ?? "Bible"} {chapterNumber}</b><Icon name="chevron" /></button><button className="sticky-search-toggle" aria-label="Search the Bible" onClick={() => setSearchOpen((open) => !open)}><Icon name="search" /></button><button aria-label="Next chapter" onClick={() => selectChapter(chapterNumber + 1)} disabled={!book || chapterNumber >= book.chapters.length}>›</button></div>
+    <div className="mobile-sticky-reader-nav"><button aria-label="Previous chapter" onClick={() => selectChapter(chapterNumber - 1)} disabled={chapterNumber <= 1}>‹</button><button className="sticky-reader-context" onClick={() => setReaderControlsOpen(true)} title={translations[version]}><span>{translations[version]}</span><b>{book?.name ?? "Bible"} {chapterNumber}</b><Icon name="chevron" /></button><button className="theme-bar-toggle" aria-label="Toggle dark mode" onClick={() => setDarkMode((enabled) => !enabled)}>{darkMode ? "☀" : "◐"}</button><button className="sticky-search-toggle" aria-label="Search the Bible" onClick={() => setSearchOpen((open) => !open)}><Icon name="search" /></button><button aria-label="Next chapter" onClick={() => selectChapter(chapterNumber + 1)} disabled={!book || chapterNumber >= book.chapters.length}>›</button></div>
     <label className={searchOpen ? "search open" : "search"}><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search the Bible" />{searchOpen && <button className="search-clear" type="button" aria-label="Clear and close search" onClick={() => { setSearch(""); setSearchOpen(false); }}>×</button>}</label>
     {loading ? <p className="loading">Preparing your offline Bible library…</p> : search.trim() ? <BibleSearchResults results={searchResults} onSelect={openSearchResult} /> : <>
       {comparison && <MobileComparison version={version} comparison={comparison} book={book} comparisonBook={comparisonBook} chapterNumber={chapterNumber} verses={visible} comparisonVerses={comparisonChapter} search={search} selectedVerse={selectedVerse} />}
@@ -239,7 +282,7 @@ function BibleSearchResults({ results, onSelect }: { results: BibleSearchResult[
   return <section className="search-results"><p className="eyebrow">{results.length === 100 ? "FIRST 100 RESULTS" : `${results.length} RESULTS`}</p>{results.map((result) => <button key={`${result.bookName}-${result.chapterNumber}-${result.verse.number}`} onClick={() => onSelect(result)}><span>{result.bookName} {result.chapterNumber}:{result.verse.number}</span><p>{result.verse.text}</p></button>)}{!results.length && <p className="empty">No matching verses were found.</p>}</section>;
 }
 
-function MobileReaderSheet({ version, comparison, book, bookName, chapterNumber, selectedVerse, books, chapter, bookPickerOpen, chapterPickerOpen, versePickerOpen, setVersion, setComparison, setSelectedVerse, setBookPickerOpen, setChapterPickerOpen, setVersePickerOpen, onSelectBook, onSelectChapter, onSelectVerse, onClose }: { version: Translation; comparison: Translation | ""; book?: BibleBook; bookName: string; chapterNumber: number; selectedVerse: string; books: BibleBook[]; chapter: Verse[]; bookPickerOpen: boolean; chapterPickerOpen: boolean; versePickerOpen: boolean; setVersion: Dispatch<SetStateAction<Translation>>; setComparison: Dispatch<SetStateAction<Translation | "">>; setSelectedVerse: Dispatch<SetStateAction<string>>; setBookPickerOpen: Dispatch<SetStateAction<boolean>>; setChapterPickerOpen: Dispatch<SetStateAction<boolean>>; setVersePickerOpen: Dispatch<SetStateAction<boolean>>; onSelectBook: (book: string) => void; onSelectChapter: (chapter: number) => void; onSelectVerse: (verse: string) => void; onClose: () => void }) {
+function MobileReaderSheet({ version, comparison, book, bookName, chapterNumber, selectedVerse, books, chapter, bookPickerOpen, chapterPickerOpen, versePickerOpen, darkMode, setDarkMode, setVersion, setComparison, setSelectedVerse, setBookPickerOpen, setChapterPickerOpen, setVersePickerOpen, onSelectBook, onSelectChapter, onSelectVerse, onClose }: { version: Translation; comparison: Translation | ""; book?: BibleBook; bookName: string; chapterNumber: number; selectedVerse: string; books: BibleBook[]; chapter: Verse[]; bookPickerOpen: boolean; chapterPickerOpen: boolean; versePickerOpen: boolean; darkMode: boolean; setDarkMode: Dispatch<SetStateAction<boolean>>; setVersion: Dispatch<SetStateAction<Translation>>; setComparison: Dispatch<SetStateAction<Translation | "">>; setSelectedVerse: Dispatch<SetStateAction<string>>; setBookPickerOpen: Dispatch<SetStateAction<boolean>>; setChapterPickerOpen: Dispatch<SetStateAction<boolean>>; setVersePickerOpen: Dispatch<SetStateAction<boolean>>; onSelectBook: (book: string) => void; onSelectChapter: (chapter: number) => void; onSelectVerse: (verse: string) => void; onClose: () => void }) {
   return <><button className="reader-sheet-backdrop" aria-label="Close reading settings" onClick={onClose} /><section className="reader-sheet"><header><h2>Reading settings</h2><button aria-label="Close" onClick={onClose}>×</button></header><div className="translation-controls"><label><span>Version</span><select value={version} onChange={(event) => { setVersion(event.target.value as Translation); setComparison(""); setSelectedVerse(""); }}>{Object.entries(translations).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label><div className="compare-bar"><label><span>Compare with</span><select value={comparison} onChange={(event) => setComparison(event.target.value as Translation | "")}><option value="">No comparison</option>{Object.entries(translations).filter(([key]) => key !== version).map(([key, name]) => <option value={key} key={key}>{key} · {name}</option>)}</select></label></div></div><div className="bible-controls"><label><span>Book</span><button type="button" className="chapter-select" onClick={() => { setBookPickerOpen((open) => !open); setChapterPickerOpen(false); setVersePickerOpen(false); }}><b>{book?.name ?? bookName}</b><Icon name="chevron" /></button></label><label><span>Chapter</span><button type="button" className="chapter-select" onClick={() => { setChapterPickerOpen((open) => !open); setBookPickerOpen(false); setVersePickerOpen(false); }}>{chapterNumber}<Icon name="chevron" /></button></label><label><span>Verse</span><button type="button" className={selectedVerse ? "chapter-select verse-select active" : "chapter-select verse-select"} onClick={() => { setVersePickerOpen((open) => !open); setBookPickerOpen(false); setChapterPickerOpen(false); }}>{selectedVerse || "All"}<Icon name="chevron" /></button></label></div>{bookPickerOpen && <div className="chapter-picker book-picker">{books.map((item) => <button key={item.id} className={item.name === book?.name ? "active" : ""} onClick={() => onSelectBook(item.name)}>{item.name}</button>)}</div>}{chapterPickerOpen && <div className="chapter-picker">{Array.from({ length: book?.chapters.length ?? 0 }, (_, index) => index + 1).map((number) => <button key={number} className={number === chapterNumber ? "active" : ""} onClick={() => onSelectChapter(number)}>{number}</button>)}</div>}{versePickerOpen && <div className="chapter-picker verse-picker"><button className={!selectedVerse ? "active" : ""} onClick={() => onSelectVerse("")}>All</button>{chapter.map((verse) => <button key={verse.number} className={verse.number === selectedVerse ? "active" : ""} onClick={() => onSelectVerse(verse.number)}>{verse.number}</button>)}</div>}</section></>;
 }
 
